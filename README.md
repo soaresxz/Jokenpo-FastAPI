@@ -9,13 +9,13 @@ Este projeto é uma aplicação completa (Fullstack) desenvolvida para a discipl
 * Linguagem: Python 3
 * Backend (API): FastAPI + Uvicorn
 * Frontend (Interface): Streamlit + Requests
-* Persistência: Em memória (estruturas de dados Python)
+* Persistência: Arquivos JSON
 
 ## Instalação
 
 Para rodar o projeto, você precisará instalar as bibliotecas listadas. Abra o terminal na pasta do projeto e execute:
 ```bash
-pip install fastapi uvicorn streamlit requests
+pip install fastapi uvicorn streamlit requests pydantic
 ```
 ## Como Rodar o Projeto
 
@@ -66,3 +66,11 @@ GET /jokenpo/history/{player_id}
 
 4. Ver Placar Geral
 GET /jokenpo/scoreboard
+
+### Como Jogar
+
+Digite seu nome na tela inicial
+Escolha sua jogada: 🪨 Pedra, 📄 Papel ou ✂️ Tesoura
+Clique em "JOGAR AGORA!"
+Veja o resultado instantaneamente
+Acompanhe suas estatísticas no painel lateral
