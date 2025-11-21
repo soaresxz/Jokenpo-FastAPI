@@ -1,18 +1,51 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import Optional
 import random
+import json
+import os
 from enum import Enum
+from datetime import datetime
 
 app = FastAPI(
     title="API Jokenpô",
-    description="Projeto final de Análise e Desenvolvimento de Sistemas - Jogo contra a CPU",
-    version="1.0.0"
+    description="Projeto final - Jogo Pedra, Papel e Tesoura contra a CPU",
+    version="2.0.0"
 )
 
-# --- Modelos de Dados (Pydantic) ---
-# Define como os dados devem chegar e sair da API
+# --- Configuração de Arquivos ---
+DATA_DIR = "data"
+PLAYERS_FILE = os.path.join(DATA_DIR, "players.json")
+HISTORY_FILE = os.path.join(DATA_DIR, "history.json")
 
+# Cria pasta data se não existir
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
+
+# --- Funções de Persistência ---
+def load_json(filename, default=None):
+    """Carrega dados de um arquivo JSON"""
+    if os.path.exists(filename):
+        try:
+            with open(filename, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return default if default is not None else {}
+    return default if default is not None else {}
+
+def save_json(filename, data):
+    """Salva dados em um arquivo JSON"""
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+# --- Carrega dados na inicialização ---
+db_players = load_json(PLAYERS_FILE, {})
+db_history = load_json(HISTORY_FILE, [])
+
+# Calcula o próximo ID
+current_id = max([int(k) for k in db_players.keys()], default=0)
+
+# --- Modelos de Dados ---
 class JokenpoMove(str, Enum):
     PEDRA = "PEDRA"
     PAPEL = "PAPEL"
@@ -20,6 +53,12 @@ class JokenpoMove(str, Enum):
 
 class PlayerCreate(BaseModel):
     name: str
+    
+    @validator('name')
+    def name_must_not_be_empty(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Nome não pode estar vazio')
+        return v.strip()
 
 class PlayRequest(BaseModel):
     player_id: int
@@ -32,21 +71,16 @@ class PlayResponse(BaseModel):
     result: str
     message: str
 
-# --- Persistência em Memória ---
-# Dicionários e Listas para guardar os dados enquanto a API roda
-db_players = {}  # Formato: {id: {"id": 1, "name": "Gabriel"}}
-db_history = []  # Lista de todas as jogadas
-current_id = 0   # Contador para gerar IDs
-
 # --- Lógica do Jogo ---
 def calculate_winner(player_move: str, cpu_move: str):
+    """Calcula o vencedor da partida"""
     if player_move == cpu_move:
         return "DRAW", "Empate! Ambos escolheram a mesma opção."
     
     wins = {
-        "PEDRA": "TESOURA",   # Pedra ganha de Tesoura
-        "TESOURA": "PAPEL",   # Tesoura ganha de Papel
-        "PAPEL": "PEDRA"      # Papel ganha de Pedra
+        "PEDRA": "TESOURA",
+        "TESOURA": "PAPEL",
+        "PAPEL": "PEDRA"
     }
     
     if wins[player_move] == cpu_move:
@@ -58,25 +92,41 @@ def calculate_winner(player_move: str, cpu_move: str):
 
 @app.get("/")
 def home():
-    return {"message": "Bem-vindo ao Jokenpô API. Acesse /docs para jogar."}
+    """Endpoint raiz com informações da API"""
+    return {
+        "message": "Bem-vindo ao Jokenpô API",
+        "version": "2.0.0",
+        "features": ["Jogador vs CPU", "Persistência em arquivos JSON"],
+        "docs": "/docs"
+    }
 
-# 1. POST /players - Cria jogador
 @app.post("/players", status_code=201)
 def create_player(player: PlayerCreate):
+    """Cria um novo jogador no sistema"""
     global current_id
     current_id += 1
-    new_player = {"id": current_id, "name": player.name}
-    db_players[current_id] = new_player
+    player_id_str = str(current_id)
+    
+    new_player = {
+        "id": current_id,
+        "name": player.name,
+        "created_at": datetime.now().isoformat()
+    }
+    
+    db_players[player_id_str] = new_player
+    save_json(PLAYERS_FILE, db_players)
+    
     return new_player
 
-# 2. POST /jokenpo/play - Realiza a jogada
 @app.post("/jokenpo/play", response_model=PlayResponse)
 def play_jokenpo(jogada: PlayRequest):
-    # Valida se jogador existe
-    if jogada.player_id not in db_players:
+    """Realiza uma jogada contra a CPU"""
+    player_id_str = str(jogada.player_id)
+    
+    if player_id_str not in db_players:
         raise HTTPException(status_code=404, detail="Jogador não encontrado")
     
-    # Lógica da CPU
+    # CPU escolhe aleatoriamente
     options = ["PEDRA", "PAPEL", "TESOURA"]
     cpu_move = random.choice(options)
     
@@ -86,12 +136,14 @@ def play_jokenpo(jogada: PlayRequest):
     # Salva no histórico
     match_record = {
         "player_id": jogada.player_id,
-        "player_name": db_players[jogada.player_id]["name"],
+        "player_name": db_players[player_id_str]["name"],
         "player_move": jogada.move.value,
         "cpu_move": cpu_move,
-        "result": result
+        "result": result,
+        "timestamp": datetime.now().isoformat()
     }
     db_history.append(match_record)
+    save_json(HISTORY_FILE, db_history)
     
     return {
         "player_id": jogada.player_id,
@@ -101,35 +153,57 @@ def play_jokenpo(jogada: PlayRequest):
         "message": message
     }
 
-# 3. GET /jokenpo/history/{player_id} - Histórico do jogador
 @app.get("/jokenpo/history/{player_id}")
 def get_history(player_id: int):
-    if player_id not in db_players:
+    """Retorna o histórico de partidas de um jogador"""
+    player_id_str = str(player_id)
+    
+    if player_id_str not in db_players:
         raise HTTPException(status_code=404, detail="Jogador não encontrado")
     
-    # Filtra a lista global pegando apenas as jogadas deste ID
     player_history = [play for play in db_history if play["player_id"] == player_id]
     return player_history
 
-# 4. GET /jokenpo/scoreboard - Placar geral
 @app.get("/jokenpo/scoreboard")
 def get_scoreboard():
+    """Retorna o placar geral com estatísticas de todos os jogadores"""
     scoreboard = []
     
     for p_id, p_data in db_players.items():
-        # Filtra jogadas deste player
-        plays = [h for h in db_history if h["player_id"] == p_id]
+        plays = [h for h in db_history if h["player_id"] == int(p_id)]
         
         wins = len([h for h in plays if h["result"] == "WIN"])
         losses = len([h for h in plays if h["result"] == "LOSE"])
         draws = len([h for h in plays if h["result"] == "DRAW"])
         
         scoreboard.append({
-            "player_id": p_id,
+            "player_id": int(p_id),
             "name": p_data["name"],
             "wins": wins,
             "losses": losses,
-            "draws": draws
+            "draws": draws,
+            "total_games": wins + losses + draws
         })
-        
+    
+    # Ordena por vitórias (decrescente)
+    scoreboard.sort(key=lambda x: x["wins"], reverse=True)
     return scoreboard
+
+@app.get("/players")
+def list_players():
+    """Lista todos os jogadores cadastrados"""
+    return list(db_players.values())
+
+@app.delete("/players/{player_id}")
+def delete_player(player_id: int):
+    """Remove um jogador do sistema"""
+    player_id_str = str(player_id)
+    
+    if player_id_str not in db_players:
+        raise HTTPException(status_code=404, detail="Jogador não encontrado")
+    
+    player_name = db_players[player_id_str]["name"]
+    del db_players[player_id_str]
+    save_json(PLAYERS_FILE, db_players)
+    
+    return {"message": f"Jogador {player_name} removido com sucesso"}
