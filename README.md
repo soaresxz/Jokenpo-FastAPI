@@ -1,4 +1,6 @@
-# Jokenpô vs CPU - Projeto Final
+
+
+# Jokenpô vs CPU <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Robot.png" alt="Robot" width="25" height="25" />
 
 Este projeto é uma aplicação completa (Fullstack) desenvolvida para a disciplina de Desenvolvimento Rápido de Aplicações em Python. O sistema implementa o jogo "Pedra, Papel e Tesoura" com uma API RESTful no backend e uma Interface Web interativa no frontend.
 
@@ -12,25 +14,25 @@ Este projeto é uma aplicação completa (Fullstack) desenvolvida para a discipl
 ## Instalação
 
 Para rodar o projeto, você precisará instalar as bibliotecas listadas. Abra o terminal na pasta do projeto e execute:
-
+```bash
 pip install fastapi uvicorn streamlit requests
-
+```
 ## Como Rodar o Projeto
 
 Como o projeto possui uma arquitetura Cliente-Servidor, é necessário abrir dois terminais diferentes:
 
 ### Passo 1: Iniciar a API (Backend)
 No primeiro terminal, execute o servidor:
-
+```bash
 python -m uvicorn main:app --reload
-
+```
 (O servidor rodará em: http://127.0.0.1:8000)
 
 ### Passo 2: Iniciar a Interface (Frontend)
 Abra um segundo terminal (na mesma pasta) e execute:
-
+```bash
 python -m streamlit run frontend.py
-
+```
 (O navegador abrirá automaticamente em: http://localhost:8501)
 
 ---
